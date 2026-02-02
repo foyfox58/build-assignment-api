@@ -12,48 +12,134 @@ app.get("/test", (req, res) => {
   res.json({ message: "Server API is working 🚀" });
 });
 
-// Create Assignment
-app.post("/assignments", async (req, res) => {
+app.get("/assignments", async (req, res) => {
   try {
-    const { title, content, category } = req.body;
-
-    // ✅ ตรวจสอบข้อมูลจาก client
-    if (!title || !content || !category) {
-      return res.status(400).json({
-        message:
-          "Server could not create assignment because there are missing data from client",
-      });
-    }
-
-    const newAssignments = {
-      title,
-      content,
-      category,
-      created_at: new Date(),
-      updated_at: new Date(),
-      published_at: new Date(),
-    };
-
-    await connectionPool.query(
-      `INSERT INTO assignments (title, content, category)
-       VALUES ($1, $2, $3)`,
-      [title, content, category]
+    const result = await connectionPool.query(
+      "SELECT * FROM assignments"
     );
 
-    return res.status(201).json({
-      message: "Created assignment successfully",
+    return res.status(200).json({
+      data: result.rows,
     });
-
   } catch (error) {
     console.log(error);
-
-    // ❌ ปัญหา database / server
     return res.status(500).json({
-      message:
-        "Server could not create assignment because database connection",
+      message: "Server could not read assignment because database connection",
     });
   }
 });
+
+app.post("/assignments", async (req, res) => {
+  try {
+    const { title, content, category } = req.body;
+    const result = await connectionPool.query(
+      "INSERT INTO assignments (title, content, category) VALUES ($1, $2, $3) RETURNING *",
+      [title, content, category]
+    );
+    if (result.rowCount === 0) {
+      return res.status(404).json({
+        message: "Server could not create assignment",
+      });
+    }
+    return res.status(201).json({
+      message: "Created assignment successfully",
+    });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({
+      message: "Server could not create assignment because database connection",
+    });
+  }
+});
+
+app.get("/assignments/:assignmentId", async (req, res) => {
+  try {
+    const { assignmentId } = req.params;
+
+    const result = await connectionPool.query(
+      "SELECT * FROM assignments WHERE assignment_id = $1",
+      [assignmentId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        message: "Server could not find a requested assignment",
+      });
+    }
+
+    return res.status(200).json({
+      data: result.rows[0],
+    });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({
+      message: "Server could not read assignment because database connection",
+    });
+  }
+});
+
+
+app.put("/assignments/:assignmentId", async (req, res) => {
+  try {
+    const { assignmentId } = req.params;
+    const { title, content, category } = req.body;
+
+    const result = await connectionPool.query(
+      `UPDATE assignments
+       SET title = $1,
+           content = $2,
+           category = $3,
+           updated_at = $4
+       WHERE assignment_id = $5`,
+      [title, content, category, new Date(), assignmentId]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({
+        message: "Server could not find a requested assignment to update",
+      });
+    }
+
+    return res.status(200).json({
+      message: "Updated assignment successfully",
+    });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({
+      message: "Server could not update assignment because database connection",
+    });
+  }
+});
+
+
+app.delete("/assignments/:assignmentId", async (req, res) => {
+  try {
+    const { assignmentId } = req.params;
+
+    const result = await connectionPool.query(
+      "DELETE FROM assignments WHERE assignment_id = $1",
+      [assignmentId]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({
+        message: "Server could not find a requested assignment to delete",
+      });
+    }
+
+    return res.status(200).json({
+      message: "Deleted assignment successfully",
+    });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({
+      message: "Server could not delete assignment because database connection",
+    });
+  }
+});
+
+
+
 
 // start server
 app.listen(port, () => {
